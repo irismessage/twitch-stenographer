@@ -78,8 +78,18 @@ class Client(twitchio.Client):
     @routines.routine(minutes=10, wait_first=True)
     async def refresh_channels(self):
         log.debug("refresh channels start")
-        config = load_config()
-        target_channels = frozenset(config["channels"])
+        try:
+            config = load_config()
+        except tomllib.TOMLDecodeError:
+            log.error("refresh channels - failed to read config")
+            return
+
+        try:
+            target_channels = frozenset(config["channels"])
+        except KeyError:
+            log.error("refresh channels - missing config key")
+            return
+
         current_channels = frozenset(
             channel.name for channel in self.connected_channels
         )
