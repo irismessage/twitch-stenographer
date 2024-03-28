@@ -13,7 +13,9 @@ Base = declarative_base()
 
 class Message(Base):
     __tablename__ = "message"
-    id: Mapped[int] = mapped_column(primary_key=True)
+    # RFC4122 UUID, 36 ASCII characters long
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    # IRC message content, max 512 bytes long
     content: Mapped[str] = mapped_column(String(512), nullable=False)
     timestamp: Mapped[datetime.datetime] = mapped_column()
 
@@ -38,8 +40,11 @@ class Client(twitchio.Client):
         await self.session.close()
         await super().close()
 
-    async def event_message(self, message: Message):
+    async def event_message(self, message: twitchio.Message):
         print(message)
+        message_row = Message(id=message.id, content=message.content, timestamp=message.timestamp)
+        async with self.session.begin():
+            self.session.add(message_row)
 
 
 def main():
