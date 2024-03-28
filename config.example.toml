@@ -1,1 +1,4 @@
-token=""
+token="abcdefghijklmnopqrstuvwxyz1234"
+channels=[
+    "twitchchannel1",
+]

@@ -8,6 +8,8 @@ from sqlalchemy.orm import declarative_base, mapped_column, Mapped
 from sqlalchemy.types import String
 
 
+CONFIG_PATH = "config.toml"
+
 Base = declarative_base()
 
 
@@ -18,6 +20,12 @@ class Message(Base):
     # IRC message content, max 512 bytes long
     content: Mapped[str] = mapped_column(String(512), nullable=False)
     timestamp: Mapped[datetime.datetime] = mapped_column()
+
+
+def load_config() -> dict:
+    with open("config.toml", "rb") as fp:
+        config = tomllib.load(fp)
+    return config
 
 
 class Client(twitchio.Client):
@@ -48,9 +56,8 @@ class Client(twitchio.Client):
 
 
 def main():
-    with open("config.toml", "rb") as fp:
-        config = tomllib.load(fp)
-    client = Client(token=config["token"], initial_channels=["joelsgp"])
+    config = load_config()
+    client = Client(token=config["token"], initial_channels=config["channels"])
     client.run()
 
 
