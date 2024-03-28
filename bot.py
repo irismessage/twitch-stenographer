@@ -3,10 +3,10 @@ import tomllib
 from typing import Optional
 
 import twitchio
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import declarative_base, mapped_column, Mapped
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.orm import Mapped, declarative_base, mapped_column
 from sqlalchemy.types import String
-
+from twitchio.ext import routines
 
 CONFIG_PATH = "config.toml"
 
@@ -37,22 +37,45 @@ class Client(twitchio.Client):
     async def connect(self):
         # setup goes here
         print("connect")
+
         self.session = AsyncSession(self.engine)
         async with self.engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+
+        self.refresh_channels.start()
+
         await super().connect()
 
     async def close(self):
         # shutdown goes here
         print("close")
         await self.session.close()
+        self.refresh_channels.cancel()
+
         await super().close()
 
     async def event_message(self, message: twitchio.Message):
         print(message)
-        message_row = Message(id=message.id, content=message.content, timestamp=message.timestamp)
+        message_row = Message(
+            id=message.id, content=message.content, timestamp=message.timestamp
+        )
         async with self.session.begin():
             self.session.add(message_row)
+
+    @routines.routine(minutes=10, wait_first=True)
+    async def refresh_channels(self):
+        config = load_config()
+        target_channels = frozenset(config["channels"])
+        current_channels = frozenset(
+            channel.name for channel in self.connected_channels
+        )
+        channels_to_leave = current_channels - target_channels
+        channels_to_join = target_channels - current_channels
+
+        if channels_to_leave:
+            await self.part_channels(list(channels_to_leave))
+        if channels_to_join:
+            await self.join_channels(list(channels_to_join))
 
 
 def main():
@@ -61,5 +84,5 @@ def main():
     client.run()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
