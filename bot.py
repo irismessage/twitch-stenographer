@@ -1,5 +1,7 @@
 import datetime
+import logging
 import tomllib
+from sys import stdout
 from typing import Optional
 
 import twitchio
@@ -11,6 +13,10 @@ from twitchio.ext import routines
 CONFIG_PATH = "config.toml"
 
 Base = declarative_base()
+
+log = logging.getLogger(__name__)
+log.addHandler(logging.StreamHandler(stdout))
+log.setLevel(logging.INFO)
 
 
 class Message(Base):
@@ -36,7 +42,7 @@ class Client(twitchio.Client):
 
     async def connect(self):
         # setup goes here
-        print("connect")
+        log.info("connect start")
 
         self.session = AsyncSession(self.engine)
         async with self.engine.begin() as conn:
@@ -46,16 +52,23 @@ class Client(twitchio.Client):
 
         await super().connect()
 
+        log.info("connect done")
+
     async def close(self):
         # shutdown goes here
-        print("close")
+        log.info("close start")
         await self.session.close()
         self.refresh_channels.cancel()
 
         await super().close()
 
+        log.info("close done")
+
+    async def event_ready(self):
+        log.info("ready")
+
     async def event_message(self, message: twitchio.Message):
-        print(message)
+        log.debug(message)
         message_row = Message(
             id=message.id, content=message.content, timestamp=message.timestamp
         )
@@ -64,6 +77,7 @@ class Client(twitchio.Client):
 
     @routines.routine(minutes=10, wait_first=True)
     async def refresh_channels(self):
+        log.debug("refresh channels start")
         config = load_config()
         target_channels = frozenset(config["channels"])
         current_channels = frozenset(
@@ -73,9 +87,12 @@ class Client(twitchio.Client):
         channels_to_join = target_channels - current_channels
 
         if channels_to_leave:
+            log.info("leaving channels: %s", " ".join(channels_to_leave))
             await self.part_channels(list(channels_to_leave))
         if channels_to_join:
+            log.info("joining channels: %s", " ".join(channels_to_join))
             await self.join_channels(list(channels_to_join))
+        log.debug("refresh channels done")
 
 
 def main():
