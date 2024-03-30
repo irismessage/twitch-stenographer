@@ -5,10 +5,11 @@ from sys import stdout
 from typing import Optional
 
 import twitchio
-from sqlalchemy import ForeignKey
+from sqlalchemy import ForeignKey, desc, select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import Mapped, declarative_base, mapped_column
 from sqlalchemy.types import String
+from twitchio import PartialChatter
 from twitchio.ext import routines
 
 CONFIG_PATH = "config.toml"
@@ -16,6 +17,7 @@ CONFIG_PATH = "config.toml"
 CHARS_UUID = 36
 CHARS_IRC_MESSAGE = 512
 CHARS_TWITCH_USERNAME = 25
+CHARS_HEX_RGB = 6
 
 Base = declarative_base()
 
@@ -44,6 +46,46 @@ class FirstMessage(Base):
     id: Mapped[str] = mapped_column(
         String(CHARS_UUID), ForeignKey(Message.id), primary_key=True
     )
+
+
+class Chatter(Base):
+    __tablename__ = "Chatter"
+    # composite primary key
+    name: Mapped[str] = mapped_column(String(CHARS_TWITCH_USERNAME), primary_key=True)
+    timestamp: Mapped[datetime] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column()
+    display_name: Mapped[str] = mapped_column()
+    color: Mapped[int] = mapped_column()
+    is_broadcaster: Mapped[bool] = mapped_column()
+    is_mod: Mapped[bool] = mapped_column()
+    is_subscriber: Mapped[bool] = mapped_column()
+    is_turbo: Mapped[bool] = mapped_column()
+    is_vip: Mapped[bool] = mapped_column()
+    prediction: Mapped[twitchio.PredictionEnum] = mapped_column()
+
+    def values(self) -> tuple:
+        return (
+            self.name,
+            self.timestamp,
+            self.id,
+            self.display_name,
+            self.color,
+            self.is_broadcaster,
+            self.is_mod,
+            self.is_subscriber,
+            self.is_turbo,
+            self.is_vip,
+            self.prediction,
+        )
+
+    def __eq__(self, other):
+        if self is other:
+            return True
+        elif isinstance(other, type(self)):
+            if self.values() == other.values():
+                return True
+        else:
+            return False
 
 
 def load_config() -> dict:
@@ -86,23 +128,60 @@ class Client(twitchio.Client):
         log.info("ready")
 
     async def event_message(self, message: twitchio.Message):
+        author = message.author
+        author_name = author.name
         log.debug(
             "message - %d characters from %s in %s",
             len(message.content),
-            message.author.name,
+            author_name,
             message.channel.name,
         )
         message_row = Message(
             id=message.id,
             content=message.content,
             timestamp=message.timestamp,
-            chatter_name=message.author.name,
+            chatter_name=author_name,
             channel_name=message.channel.name,
         )
+
+        # find the most recent author record for this chatter.
+        # if it exists and matches the current badges etc.,
+        # we don't need to insert a new one.
+        # todo make names more consistent
+        author_query = (
+            select(Chatter)
+            .where(Chatter.name == author_name)
+            .order_by(desc(Chatter.timestamp))
+            .limit(1)
+        )
+        last_author_record = await self.session.scalar(author_query)
+
+        if isinstance(author, PartialChatter):
+            chatter = Chatter(name=author_name, timestamp=message.timestamp)
+        else:
+            # id may be None
+            chatter_id = author.id and int(author.id)
+            chatter_color = int(author.color.removeprefix("#"), 16)
+            chatter = Chatter(
+                name=author_name,
+                timestamp=message.timestamp,
+                id=chatter_id,
+                display_name=author.display_name,
+                color=chatter_color,
+                is_broadcaster=author.is_broadcaster,
+                is_mod=author.is_mod,
+                is_subscriber=author.is_subscriber,
+                is_turbo=author.is_turbo,
+                is_vip=author.is_vip,
+                prediction=author.prediction,
+            )
+
         async with self.session.begin():
             self.session.add(message_row)
             if message.first:
                 self.session.add(FirstMessage(id=message.id))
+            if last_author_record != chatter:
+                self.session.add(chatter)
 
     @routines.routine(minutes=10, wait_first=True)
     async def refresh_channels(self):
