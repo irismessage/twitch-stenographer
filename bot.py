@@ -1,6 +1,6 @@
-import datetime
 import logging
 import tomllib
+from datetime import datetime
 from sys import stdout
 from typing import Optional
 
@@ -11,6 +11,10 @@ from sqlalchemy.types import String
 from twitchio.ext import routines
 
 CONFIG_PATH = "config.toml"
+# character lengths / limits
+CHARS_UUID = 36
+CHARS_IRC_MESSAGE = 512
+CHARS_TWITCH_USERNAME = 25
 
 Base = declarative_base()
 
@@ -22,10 +26,16 @@ log.setLevel(logging.INFO)
 class Message(Base):
     __tablename__ = "message"
     # RFC4122 UUID, 36 ASCII characters long
-    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    id: Mapped[str] = mapped_column(String(CHARS_UUID), primary_key=True)
     # IRC message content, max 512 bytes long
-    content: Mapped[str] = mapped_column(String(512), nullable=False)
-    timestamp: Mapped[datetime.datetime] = mapped_column()
+    content: Mapped[str] = mapped_column(String(CHARS_IRC_MESSAGE), nullable=False)
+    timestamp: Mapped[datetime] = mapped_column(nullable=False)
+    chatter_name: Mapped[str] = mapped_column(
+        String(CHARS_TWITCH_USERNAME), nullable=False
+    )
+    channel_name: Mapped[str] = mapped_column(
+        String(CHARS_TWITCH_USERNAME), nullable=False
+    )
 
 
 def load_config() -> dict:
@@ -68,9 +78,18 @@ class Client(twitchio.Client):
         log.info("ready")
 
     async def event_message(self, message: twitchio.Message):
-        log.debug(message)
+        log.debug(
+            "message - %d characters from %s in %s",
+            len(message.content),
+            message.author.name,
+            message.channel.name,
+        )
         message_row = Message(
-            id=message.id, content=message.content, timestamp=message.timestamp
+            id=message.id,
+            content=message.content,
+            timestamp=message.timestamp,
+            chatter_name=message.author.name,
+            channel_name=message.channel.name,
         )
         async with self.session.begin():
             self.session.add(message_row)
