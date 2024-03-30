@@ -5,6 +5,7 @@ from sys import stdout
 from typing import Optional
 
 import twitchio
+from sqlalchemy import ForeignKey
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import Mapped, declarative_base, mapped_column
 from sqlalchemy.types import String
@@ -35,6 +36,13 @@ class Message(Base):
     )
     channel_name: Mapped[str] = mapped_column(
         String(CHARS_TWITCH_USERNAME), nullable=False
+    )
+
+
+class FirstMessage(Base):
+    __tablename__ = "FirstMessage"
+    id: Mapped[str] = mapped_column(
+        String(CHARS_UUID), ForeignKey(Message.id), primary_key=True
     )
 
 
@@ -93,6 +101,8 @@ class Client(twitchio.Client):
         )
         async with self.session.begin():
             self.session.add(message_row)
+            if message.first:
+                self.session.add(FirstMessage(id=message.id))
 
     @routines.routine(minutes=10, wait_first=True)
     async def refresh_channels(self):
