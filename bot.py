@@ -25,7 +25,7 @@ log.setLevel(logging.INFO)
 
 
 class Message(Base):
-    __tablename__ = "message"
+    __tablename__ = "Message"
     # RFC4122 UUID, 36 ASCII characters long
     id: Mapped[str] = mapped_column(String(CHARS_UUID), primary_key=True)
     # IRC message content, max 512 bytes long
