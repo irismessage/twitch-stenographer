@@ -168,18 +168,17 @@ class Client(twitchio.Client):
         )
         message_row = Message.from_message(message)
 
-        # find the most recent author record for this chatter.
+        # find the most recent chatter record for this author.
         # if it exists and matches the current badges etc.,
         # we don't need to insert a new one.
-        # todo make names more consistent
-        author_query = (
+        last_chatter_query = (
             select(Chatter)
             .where(Chatter.name == author_name)
             .order_by(desc(Chatter.timestamp))
             .limit(1)
         )
         async with self.session.begin():
-            last_author_record = await self.session.scalar(author_query)
+            last_chatter_record = await self.session.scalar(last_chatter_query)
 
             # todo fix
             if isinstance(message.author, PartialChatter):
@@ -191,7 +190,7 @@ class Client(twitchio.Client):
             self.session.add(message_row)
             if message.first:
                 self.session.add(FirstMessage(id=message.id))
-            if last_author_record != chatter:
+            if last_chatter_record != chatter:
                 self.session.add(chatter)
 
     @routines.routine(minutes=10, wait_first=True)
