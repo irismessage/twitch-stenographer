@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "c3c98a4ce49181b1081588c1feb8ea1d911f088434027a002aa9665bcd4ea8b6"
+            "sha256": "c9a0e35754f64b948614ace2a284237d6c6c27a8a257bc7a61bdad4aa9afe2ad"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -383,6 +383,9 @@
             "version": "==6.0.5"
         },
         "sqlalchemy": {
+            "extras": [
+                "asyncio"
+            ],
             "hashes": [
                 "sha256:01d10638a37460616708062a40c7b55f73e4d35eaa146781c683e0fa7f6c43fb",
                 "sha256:04c487305ab035a9548f573763915189fc0fe0824d9ba28433196f8436f1449c",
@@ -434,13 +437,12 @@
                 "sha256:ea311d4ee9a8fa67f139c088ae9f905fcf0277d6cd75c310a21a88bf85e130f5",
                 "sha256:fecd5089c4be1bcc37c35e9aa678938d2888845a134dd016de457b942cf5a758"
             ],
-            "index": "pypi",
             "markers": "python_version >= '3.7'",
             "version": "==2.0.29"
         },
         "twitchio": {
             "extras": [
-                "speed"
+                "speedup"
             ],
             "hashes": [
                 "sha256:5820f6690d8cca1d709cca741119c3c079e8cb4866e64e553dd0e1721b4ff16f",

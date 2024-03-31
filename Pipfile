@@ -6,7 +6,7 @@ name = "pypi"
 [packages]
 twitchio = "*"
 aiosqlite = "*"
-sqlalchemy = "*"
+sqlalchemy = {extras = ["asyncio"], version = "*"}
 
 [dev-packages]
 black = "*"
