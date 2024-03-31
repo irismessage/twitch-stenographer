@@ -2,7 +2,7 @@ import logging
 import tomllib
 from datetime import datetime
 from sys import stdout
-from typing import Optional
+from typing import Optional, Self
 
 import twitchio
 from sqlalchemy import ForeignKey, desc, select
@@ -14,7 +14,9 @@ from twitchio.ext import routines
 
 CONFIG_PATH = "config.toml"
 # character lengths / limits
+# RFC4122 UUID, 36 ASCII characters long
 CHARS_UUID = 36
+# IRC message content, max 512 bytes long
 CHARS_IRC_MESSAGE = 512
 CHARS_TWITCH_USERNAME = 25
 CHARS_HEX_RGB = 6
@@ -28,9 +30,7 @@ log.setLevel(logging.INFO)
 
 class Message(Base):
     __tablename__ = "Message"
-    # RFC4122 UUID, 36 ASCII characters long
     id: Mapped[str] = mapped_column(String(CHARS_UUID), primary_key=True)
-    # IRC message content, max 512 bytes long
     content: Mapped[str] = mapped_column(String(CHARS_IRC_MESSAGE), nullable=False)
     timestamp: Mapped[datetime] = mapped_column(nullable=False)
     chatter_name: Mapped[str] = mapped_column(
@@ -39,6 +39,16 @@ class Message(Base):
     channel_name: Mapped[str] = mapped_column(
         String(CHARS_TWITCH_USERNAME), nullable=False
     )
+
+    @classmethod
+    def from_message(cls, message: twitchio.Message) -> Self:
+        return cls(
+            id=message.id,
+            content=message.content,
+            timestamp=message.timestamp,
+            chatter_name=message.author.name,
+            channel_name=message.channel.name,
+        )
 
 
 class FirstMessage(Base):
@@ -77,6 +87,26 @@ class Chatter(Base):
             self.is_turbo,
             self.is_vip,
             self.prediction,
+        )
+
+    @classmethod
+    def from_message(cls, message: twitchio.Message) -> Self:
+        author = message.author
+        # id may be None
+        chatter_id = author.id and int(author.id)
+        chatter_color = int(author.color.removeprefix("#"), 16)
+        return Chatter(
+            name=author.name,
+            timestamp=message.timestamp,
+            id=chatter_id,
+            display_name=author.display_name,
+            color=chatter_color,
+            is_broadcaster=author.is_broadcaster,
+            is_mod=author.is_mod,
+            is_subscriber=author.is_subscriber,
+            is_turbo=author.is_turbo,
+            is_vip=author.is_vip,
+            prediction=author.prediction,
         )
 
     def __eq__(self, other):
@@ -129,21 +159,14 @@ class Client(twitchio.Client):
         log.info("ready")
 
     async def event_message(self, message: twitchio.Message):
-        author = message.author
-        author_name = author.name
+        author_name = message.author.name
         log.debug(
             "message - %d characters from %s in %s",
             len(message.content),
             author_name,
             message.channel.name,
         )
-        message_row = Message(
-            id=message.id,
-            content=message.content,
-            timestamp=message.timestamp,
-            chatter_name=author_name,
-            channel_name=message.channel.name,
-        )
+        message_row = Message.from_message(message)
 
         # find the most recent author record for this chatter.
         # if it exists and matches the current badges etc.,
@@ -159,26 +182,10 @@ class Client(twitchio.Client):
             last_author_record = await self.session.scalar(author_query)
 
             # todo fix
-            if isinstance(author, PartialChatter):
+            if isinstance(message.author, PartialChatter):
                 chatter = Chatter(name=author_name, timestamp=message.timestamp)
             else:
-                # id may be None
-                chatter_id = author.id and int(author.id)
-                chatter_color = int(author.color.removeprefix("#"), 16)
-                # todo make from_message staticmethod
-                chatter = Chatter(
-                    name=author_name,
-                    timestamp=message.timestamp,
-                    id=chatter_id,
-                    display_name=author.display_name,
-                    color=chatter_color,
-                    is_broadcaster=author.is_broadcaster,
-                    is_mod=author.is_mod,
-                    is_subscriber=author.is_subscriber,
-                    is_turbo=author.is_turbo,
-                    is_vip=author.is_vip,
-                    prediction=author.prediction,
-                )
+                chatter = Chatter.from_message(message)
 
         # async with self.session.begin():
             self.session.add(message_row)
