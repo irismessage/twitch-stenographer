@@ -9,7 +9,6 @@ from sqlalchemy import ForeignKey, desc, select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import Mapped, declarative_base, mapped_column
 from sqlalchemy.types import String
-from twitchio import PartialChatter
 from twitchio.ext import routines
 
 CONFIG_PATH = "config.toml"
@@ -61,9 +60,14 @@ class FirstMessage(Base):
 class Chatter(Base):
     __tablename__ = "Chatter"
     # composite primary key
-    # todo add foreignkey
-    name: Mapped[str] = mapped_column(String(CHARS_TWITCH_USERNAME), primary_key=True)
-    timestamp: Mapped[datetime] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(
+        String(CHARS_TWITCH_USERNAME),
+        ForeignKey(Message.chatter_name),
+        primary_key=True,
+    )
+    timestamp: Mapped[datetime] = mapped_column(
+        ForeignKey(Message.timestamp), primary_key=True
+    )
     id: Mapped[int] = mapped_column(nullable=True)
     display_name: Mapped[str] = mapped_column(nullable=True)
     color: Mapped[int] = mapped_column(nullable=True)
@@ -104,7 +108,8 @@ class Chatter(Base):
             is_broadcaster=author.is_broadcaster,
             is_mod=author.is_mod,
             is_subscriber=author.is_subscriber,
-            is_turbo=author.is_turbo,
+            # todo submit bug to twitchio
+            is_turbo=author.is_turbo == "1",
             is_vip=author.is_vip,
             prediction=author.prediction,
         )
