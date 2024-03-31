@@ -58,6 +58,14 @@ class FirstMessage(Base):
     )
 
 
+class DeletedMessage(Base):
+    __tablename__ = "DeletedMessage"
+    id: Mapped[str] = mapped_column(String(CHARS_UUID), ForeignKey(Message.id), primary_key=True)
+    # timestamp of deletion
+    timestamp: Mapped[str] = mapped_column(nullable=False)
+    # name of the moderator that deleted it isn't given?
+
+
 class Chatter(Base):
     __tablename__ = "Chatter"
     # composite primary key
@@ -109,7 +117,7 @@ class Chatter(Base):
             is_broadcaster=author.is_broadcaster,
             is_mod=author.is_mod,
             is_subscriber=author.is_subscriber,
-            # todo submit bug to twitchio
+            # twitchio bug, this should be bool
             is_turbo=author.is_turbo == "1",
             is_vip=author.is_vip,
             prediction=author.prediction,
