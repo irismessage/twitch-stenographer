@@ -12,6 +12,7 @@ from sqlalchemy.types import String
 from twitchio.ext import routines
 
 CONFIG_PATH = "config.toml"
+DATABASE_PATH = "archive.db"
 # character lengths / limits
 # RFC4122 UUID, 36 ASCII characters long
 CHARS_UUID = 36
@@ -133,7 +134,7 @@ def load_config() -> dict:
 class Client(twitchio.Client):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.engine = create_async_engine("sqlite+aiosqlite:///test.db")
+        self.engine = create_async_engine(F"sqlite+aiosqlite:///{DATABASE_PATH}")
         self.session: Optional[AsyncSession] = None
 
     async def connect(self):
