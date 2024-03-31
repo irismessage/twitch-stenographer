@@ -180,13 +180,13 @@ class Client(twitchio.Client):
         async with self.session.begin():
             last_chatter_record = await self.session.scalar(last_chatter_query)
 
-            # todo fix
-            if isinstance(message.author, PartialChatter):
-                chatter = Chatter(name=author_name, timestamp=message.timestamp)
-            else:
+            if isinstance(message.author, twitchio.Chatter):
+                # has extra info about the chatter
                 chatter = Chatter.from_message(message)
+            else:
+                # doesn't have extra info, use null columns
+                chatter = Chatter(name=author_name, timestamp=message.timestamp)
 
-        # async with self.session.begin():
             self.session.add(message_row)
             if message.first:
                 self.session.add(FirstMessage(id=message.id))
