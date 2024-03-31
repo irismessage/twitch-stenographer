@@ -133,6 +133,29 @@ class Chatter(Base):
             return False
 
 
+class Channel(Base):
+    __tablename__ = "Channel"
+    name: Mapped[str] = mapped_column(
+        String(CHARS_TWITCH_USERNAME),
+        ForeignKey(Message.channel_name),
+        primary_key=True,
+    )
+    timestamp: Mapped[datetime] = mapped_column(
+        ForeignKey(Message.timestamp), primary_key=True
+    )
+    # always given for User
+    id: Mapped[int] = mapped_column(nullable=False)
+
+    @classmethod
+    def from_message(cls, message: twitchio.Message) -> Self:
+        # user = aw
+        return cls(
+            name=message.channel.name,
+            timestamp=message.timestamp,
+            # id=message.channel.user().
+        )
+
+
 def load_config() -> dict:
     with open("config.toml", "rb") as fp:
         config = tomllib.load(fp)
