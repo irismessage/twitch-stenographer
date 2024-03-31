@@ -51,17 +51,18 @@ class FirstMessage(Base):
 class Chatter(Base):
     __tablename__ = "Chatter"
     # composite primary key
+    # todo add foreignkey
     name: Mapped[str] = mapped_column(String(CHARS_TWITCH_USERNAME), primary_key=True)
     timestamp: Mapped[datetime] = mapped_column(primary_key=True)
-    id: Mapped[int] = mapped_column()
-    display_name: Mapped[str] = mapped_column()
-    color: Mapped[int] = mapped_column()
-    is_broadcaster: Mapped[bool] = mapped_column()
-    is_mod: Mapped[bool] = mapped_column()
-    is_subscriber: Mapped[bool] = mapped_column()
-    is_turbo: Mapped[bool] = mapped_column()
-    is_vip: Mapped[bool] = mapped_column()
-    prediction: Mapped[twitchio.PredictionEnum] = mapped_column()
+    id: Mapped[int] = mapped_column(nullable=True)
+    display_name: Mapped[str] = mapped_column(nullable=True)
+    color: Mapped[int] = mapped_column(nullable=True)
+    is_broadcaster: Mapped[bool] = mapped_column(nullable=True)
+    is_mod: Mapped[bool] = mapped_column(nullable=True)
+    is_subscriber: Mapped[bool] = mapped_column(nullable=True)
+    is_turbo: Mapped[bool] = mapped_column(nullable=True)
+    is_vip: Mapped[bool] = mapped_column(nullable=True)
+    prediction: Mapped[twitchio.PredictionEnum] = mapped_column(nullable=True)
 
     def values(self) -> tuple:
         return (
@@ -154,29 +155,32 @@ class Client(twitchio.Client):
             .order_by(desc(Chatter.timestamp))
             .limit(1)
         )
-        last_author_record = await self.session.scalar(author_query)
-
-        if isinstance(author, PartialChatter):
-            chatter = Chatter(name=author_name, timestamp=message.timestamp)
-        else:
-            # id may be None
-            chatter_id = author.id and int(author.id)
-            chatter_color = int(author.color.removeprefix("#"), 16)
-            chatter = Chatter(
-                name=author_name,
-                timestamp=message.timestamp,
-                id=chatter_id,
-                display_name=author.display_name,
-                color=chatter_color,
-                is_broadcaster=author.is_broadcaster,
-                is_mod=author.is_mod,
-                is_subscriber=author.is_subscriber,
-                is_turbo=author.is_turbo,
-                is_vip=author.is_vip,
-                prediction=author.prediction,
-            )
-
         async with self.session.begin():
+            last_author_record = await self.session.scalar(author_query)
+
+            # todo fix
+            if isinstance(author, PartialChatter):
+                chatter = Chatter(name=author_name, timestamp=message.timestamp)
+            else:
+                # id may be None
+                chatter_id = author.id and int(author.id)
+                chatter_color = int(author.color.removeprefix("#"), 16)
+                # todo make from_message staticmethod
+                chatter = Chatter(
+                    name=author_name,
+                    timestamp=message.timestamp,
+                    id=chatter_id,
+                    display_name=author.display_name,
+                    color=chatter_color,
+                    is_broadcaster=author.is_broadcaster,
+                    is_mod=author.is_mod,
+                    is_subscriber=author.is_subscriber,
+                    is_turbo=author.is_turbo,
+                    is_vip=author.is_vip,
+                    prediction=author.prediction,
+                )
+
+        # async with self.session.begin():
             self.session.add(message_row)
             if message.first:
                 self.session.add(FirstMessage(id=message.id))
