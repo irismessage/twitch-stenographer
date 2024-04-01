@@ -60,7 +60,9 @@ class FirstMessage(Base):
 
 class DeletedMessage(Base):
     __tablename__ = "DeletedMessage"
-    id: Mapped[str] = mapped_column(String(CHARS_UUID), ForeignKey(Message.id), primary_key=True)
+    id: Mapped[str] = mapped_column(
+        String(CHARS_UUID), ForeignKey(Message.id), primary_key=True
+    )
     # timestamp of deletion
     timestamp: Mapped[str] = mapped_column(nullable=False)
     # name of the moderator that deleted it isn't given?
@@ -87,10 +89,9 @@ class Chatter(Base):
     is_vip: Mapped[bool] = mapped_column(nullable=True)
     prediction: Mapped[twitchio.PredictionEnum] = mapped_column(nullable=True)
 
-    def values(self) -> tuple:
+    def _values(self) -> tuple:
         return (
             self.name,
-            self.timestamp,
             self.id,
             self.display_name,
             self.color,
@@ -127,7 +128,7 @@ class Chatter(Base):
         if self is other:
             return True
         elif isinstance(other, type(self)):
-            if self.values() == other.values():
+            if self._values() == other._values():
                 return True
         else:
             return False
@@ -146,14 +147,18 @@ class Channel(Base):
     # always given for User
     id: Mapped[int] = mapped_column(nullable=False)
 
-    @classmethod
-    def from_message(cls, message: twitchio.Message) -> Self:
-        # user = aw
-        return cls(
-            name=message.channel.name,
-            timestamp=message.timestamp,
-            # id=message.channel.user().
-        )
+    # todo mixin to unify this and Message?
+    def _values(self) -> tuple:
+        return self.name, self.id
+
+    def __eq__(self, other):
+        if self is other:
+            return True
+        elif isinstance(other, type(self)):
+            if self._values() == other._values():
+                return True
+        else:
+            return False
 
 
 def load_config() -> dict:
@@ -165,7 +170,7 @@ def load_config() -> dict:
 class Client(twitchio.Client):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.engine = create_async_engine(F"sqlite+aiosqlite:///{DATABASE_PATH}")
+        self.engine = create_async_engine(f"sqlite+aiosqlite:///{DATABASE_PATH}")
         self.session: Optional[AsyncSession] = None
 
     async def connect(self):
@@ -214,9 +219,16 @@ class Client(twitchio.Client):
             .order_by(desc(Chatter.timestamp))
             .limit(1)
         )
+        last_channel_query = (
+            select(Channel)
+            .where(Channel.name == message.channel.name)
+            .order_by(desc(Chatter.timestamp))
+            .limit(1)
+        )
+        # todo check this is sqlalchemy best practice
         async with self.session.begin():
+            # todo move up out of begin block
             last_chatter_record = await self.session.scalar(last_chatter_query)
-
             if isinstance(message.author, twitchio.Chatter):
                 # has extra info about the chatter
                 chatter = Chatter.from_message(message)
@@ -224,11 +236,17 @@ class Client(twitchio.Client):
                 # doesn't have extra info, use null columns
                 chatter = Chatter(name=author_name, timestamp=message.timestamp)
 
+            last_channel_record = await self.session.scalar(last_channel_query)
+            user = await message.channel.user()
+            channel = Channel(name=user.name, timestamp=message.timestamp, id=user.id)
+
             self.session.add(message_row)
             if message.first:
                 self.session.add(FirstMessage(id=message.id))
             if last_chatter_record != chatter:
                 self.session.add(chatter)
+            if last_channel_record != channel:
+                self.session.add(channel)
 
     @routines.routine(minutes=10, wait_first=True)
     async def refresh_channels(self):
