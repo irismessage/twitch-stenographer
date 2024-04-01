@@ -69,6 +69,7 @@ class DeletedMessage(Base):
 
 
 class Chatter(Base):
+    # todo add badges
     __tablename__ = "Chatter"
     # composite primary key
     name: Mapped[str] = mapped_column(
@@ -108,7 +109,11 @@ class Chatter(Base):
         author = message.author
         # id may be None
         chatter_id = author.id and int(author.id)
-        chatter_color = int(author.color.removeprefix("#"), 16)
+        # color may also be empty string, docs don't mention this
+        if author.color:
+            chatter_color = int(author.color.removeprefix("#"), 16)
+        else:
+            chatter_color = None
         return Chatter(
             name=author.name,
             timestamp=message.timestamp,
@@ -222,7 +227,7 @@ class Client(twitchio.Client):
         last_channel_query = (
             select(Channel)
             .where(Channel.name == message.channel.name)
-            .order_by(desc(Chatter.timestamp))
+            .order_by(desc(Channel.timestamp))
             .limit(1)
         )
         # todo check this is sqlalchemy best practice
@@ -248,6 +253,8 @@ class Client(twitchio.Client):
             if last_channel_record != channel:
                 self.session.add(channel)
 
+    # todo add command for this?
+    # file watch requires another library
     @routines.routine(minutes=10, wait_first=True)
     async def refresh_channels(self):
         log.debug("refresh channels start")
