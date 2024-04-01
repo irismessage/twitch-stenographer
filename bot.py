@@ -28,6 +28,20 @@ log.addHandler(logging.StreamHandler(stdout))
 log.setLevel(logging.INFO)
 
 
+class ComparableRow:
+    def _values(self) -> tuple:
+        raise NotImplemented
+
+    def __eq__(self, other):
+        if self is other:
+            return True
+        elif isinstance(other, type(self)):
+            if self._values() == other._values():
+                return True
+        else:
+            return False
+
+
 class Message(Base):
     __tablename__ = "Message"
     id: Mapped[str] = mapped_column(String(CHARS_UUID), primary_key=True)
@@ -90,20 +104,6 @@ class Chatter(Base):
     is_vip: Mapped[bool] = mapped_column(nullable=True)
     prediction: Mapped[twitchio.PredictionEnum] = mapped_column(nullable=True)
 
-    def _values(self) -> tuple:
-        return (
-            self.name,
-            self.id,
-            self.display_name,
-            self.color,
-            self.is_broadcaster,
-            self.is_mod,
-            self.is_subscriber,
-            self.is_turbo,
-            self.is_vip,
-            self.prediction,
-        )
-
     @classmethod
     def from_message(cls, message: twitchio.Message) -> Self:
         author = message.author
@@ -127,6 +127,20 @@ class Chatter(Base):
             is_turbo=author.is_turbo == "1",
             is_vip=author.is_vip,
             prediction=author.prediction,
+        )
+
+    def _values(self) -> tuple:
+        return (
+            self.name,
+            self.id,
+            self.display_name,
+            self.color,
+            self.is_broadcaster,
+            self.is_mod,
+            self.is_subscriber,
+            self.is_turbo,
+            self.is_vip,
+            self.prediction,
         )
 
     def __eq__(self, other):
