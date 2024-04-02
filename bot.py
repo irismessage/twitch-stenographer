@@ -228,17 +228,7 @@ class Client(twitchio.Client):
             message.channel.name,
         )
 
-        message_row = Message.from_message(message)
-
-        if isinstance(message.author, twitchio.Chatter):
-            # has extra info about the chatter
-            chatter = Chatter.from_message(message)
-        else:
-            # doesn't have extra info, use null columns
-            chatter = Chatter(name=author_name, timestamp=message.timestamp)
-
         user = await message.channel.user()
-        channel = Channel(name=user.name, timestamp=message.timestamp, id=user.id)
 
         # find the most recent chatter record for this author.
         # if it exists and matches the current badges etc.,
@@ -259,6 +249,17 @@ class Client(twitchio.Client):
         async with self.session.begin():
             last_chatter_record = await self.session.scalar(last_chatter_query)
             last_channel_record = await self.session.scalar(last_channel_query)
+
+            message_row = Message.from_message(message)
+
+            if isinstance(message.author, twitchio.Chatter):
+                # has extra info about the chatter
+                chatter = Chatter.from_message(message)
+            else:
+                # doesn't have extra info, use null columns
+                chatter = Chatter(name=author_name, timestamp=message.timestamp)
+
+            channel = Channel(name=user.name, timestamp=message.timestamp, id=user.id)
 
             self.session.add(message_row)
             if message.first:
