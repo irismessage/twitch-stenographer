@@ -13,6 +13,17 @@ from twitchio.ext.routines import routine
 
 # todo script to output all data to csv from a db
 #   for the lay folk
+# currently not recorded:
+#   - message deletion - in progress
+#   - votes and predictions
+#   - subscriptions
+#   - stream details
+#   - highlighted messages
+#   - cheers
+#   - user join and leave not worth it
+#   - room state - emote only etc.
+#   - mass message deletion (ban and timeout)
+#   - raid
 
 CONFIG_PATH = "config.toml"
 DATABASE_PATH = "archive.db"
