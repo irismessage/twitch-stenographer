@@ -16,7 +16,9 @@ from twitchio.ext.routines import routine
 
 CONFIG_PATH = "config.toml"
 DATABASE_PATH = "archive.db"
+COUNTER_INTERVAL_MINUTES = 60
 # character lengths / limits
+# should I make these just sqla types instead
 # RFC4122 UUID, 36 ASCII characters long
 CHARS_UUID = 36
 # IRC message content, max 512 bytes long
@@ -185,11 +187,24 @@ def load_config() -> dict:
     return config
 
 
+class LogCounter:
+    def __init__(self):
+        self.messages = 0
+        self.channels = 0
+        self.chatters = 0
+
+    def reset(self):
+        self.messages = 0
+        self.channels = 0
+        self.chatters = 0
+
+
 class Client(twitchio.Client):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.engine = create_async_engine(f"sqlite+aiosqlite:///{DATABASE_PATH}")
         self.async_session = async_sessionmaker(self.engine)
+        self.counter = LogCounter()
 
     async def connect(self):
         # setup goes here
@@ -199,6 +214,7 @@ class Client(twitchio.Client):
             await conn.run_sync(Base.metadata.create_all)
         await super().connect()
         self.refresh_channels.start()
+        self.log_counter.start()
 
         log.info("connect done")
 
@@ -206,6 +222,7 @@ class Client(twitchio.Client):
         # shutdown goes here
         log.info("close start")
 
+        self.log_counter.cancel()
         self.refresh_channels.cancel()
         await super().close()
         await self.engine.dispose()
@@ -215,7 +232,6 @@ class Client(twitchio.Client):
     async def event_ready(self):
         log.info("ready")
 
-    # todo log messages added e.g. per hour
     async def event_message(self, message: twitchio.Message):
         author_name = message.author.name
         log.debug(
@@ -231,8 +247,10 @@ class Client(twitchio.Client):
         if isinstance(message.author, twitchio.Chatter):
             # has extra info about the chatter
             chatter = Chatter.from_message(message)
+            log.debug("author - Chatter")
         else:
             # doesn't have extra info, use null columns
+            log.debug("author - PartialChatter")
             chatter = Chatter(
                 name=author_name,
                 timestamp=message.timestamp,
@@ -262,12 +280,18 @@ class Client(twitchio.Client):
             last_channel_record = await session.scalar(last_channel_query)
 
             session.add(message_row)
+            self.counter.messages += 1
             if message.first:
+                log.debug("first message")
                 session.add(FirstMessage(id=message.id))
-            if last_chatter_record != chatter:
-                session.add(chatter)
             if last_channel_record != channel:
+                log.debug("adding channel record")
                 session.add(channel)
+                self.counter.channels += 1
+            if last_chatter_record != chatter:
+                log.debug("adding chatter record")
+                session.add(chatter)
+                self.counter.chatters += 1
 
     # file watch requires another library
     @routine(minutes=10, wait_first=True)
@@ -299,9 +323,21 @@ class Client(twitchio.Client):
             await self.join_channels(list(channels_to_join))
         log.debug("refresh channels done")
 
+    @routine(minutes=COUNTER_INTERVAL_MINUTES, wait_first=True)
+    async def log_counter(self):
+        log.info(
+            "last %d minutes: %d messages, %d channels, %d chatters",
+            COUNTER_INTERVAL_MINUTES,
+            self.counter.messages,
+            self.counter.channels,
+            self.counter.chatters,
+        )
+        self.counter.reset()
+
 
 def main():
     config = load_config()
+    log.info("initial channels: %s", " ".join(config["channels"]))
     client = Client(token=config["token"], initial_channels=config["channels"])
     client.run()
 
