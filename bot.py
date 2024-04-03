@@ -11,6 +11,9 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import String
 from twitchio.ext.routines import routine
 
+# todo script to output all data to csv from a db
+#   for the lay folk
+
 CONFIG_PATH = "config.toml"
 DATABASE_PATH = "archive.db"
 # character lengths / limits
@@ -85,6 +88,9 @@ class DeletedMessage(Base):
     # name of the moderator that deleted it isn't given?
 
 
+# could split some of this off into a User class
+# with all that info in there
+# and also have the same relation for Chatter
 class Channel(ComparableRow, Base):
     __tablename__ = "Channel"
     name: Mapped[str] = mapped_column(
@@ -103,7 +109,6 @@ class Channel(ComparableRow, Base):
 
 
 class Chatter(ComparableRow, Base):
-    # todo add badges
     __tablename__ = "Chatter"
     # composite primary key
     name: Mapped[str] = mapped_column(
@@ -117,6 +122,8 @@ class Chatter(ComparableRow, Base):
     channel: Mapped[str] = mapped_column(
         String(CHARS_TWITCH_USERNAME), ForeignKey(Channel.name)
     )
+    # could make this some kind of complex relation to save negligible space
+    badges: Mapped[Optional[str]] = mapped_column(nullable=True)
     id: Mapped[Optional[int]] = mapped_column(nullable=True)
     display_name: Mapped[Optional[str]] = mapped_column(nullable=True)
     color: Mapped[Optional[int]] = mapped_column(nullable=True)
@@ -138,14 +145,16 @@ class Chatter(ComparableRow, Base):
             chatter_color = int(author.color.removeprefix("#"), 16)
         else:
             chatter_color = None
+        # same as _badges attr but inspections doesn't like
+        badges = ",".join(f"{k}/{v}" for k, v in author.badges.items())
         return cls(
             name=author.name,
             timestamp=message.timestamp,
             channel=message.channel.name,
+            badges=badges,
             id=chatter_id,
             display_name=author.display_name,
             color=chatter_color,
-            is_broadcaster=author.is_broadcaster,
             is_mod=author.is_mod,
             is_subscriber=author.is_subscriber,
             # twitchio bug, this should be bool
@@ -157,8 +166,9 @@ class Chatter(ComparableRow, Base):
     def _values(self) -> tuple:
         return (
             self.name,
-            self.id,
             self.channel,
+            self.badges,
+            self.id,
             self.display_name,
             self.color,
             self.is_mod,
