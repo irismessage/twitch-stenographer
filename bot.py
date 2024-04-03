@@ -7,7 +7,7 @@ from typing import Optional, Self
 import twitchio
 from sqlalchemy import ForeignKey, desc, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlalchemy.orm import Mapped, declarative_base, mapped_column
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import String
 from twitchio.ext import routines
 
@@ -21,11 +21,14 @@ CHARS_IRC_MESSAGE = 512
 CHARS_TWITCH_USERNAME = 25
 CHARS_HEX_RGB = 6
 
-Base = declarative_base()
 
 log = logging.getLogger(__name__)
 log.addHandler(logging.StreamHandler(stdout))
 log.setLevel(logging.INFO)
+
+
+class Base(DeclarativeBase):
+    pass
 
 
 class ComparableRow:
@@ -82,7 +85,7 @@ class DeletedMessage(Base):
     # name of the moderator that deleted it isn't given?
 
 
-class Chatter(Base):
+class Chatter(ComparableRow, Base):
     # todo add badges
     # todo column for relevant channel
     __tablename__ = "Chatter"
@@ -95,6 +98,7 @@ class Chatter(Base):
     timestamp: Mapped[datetime] = mapped_column(
         ForeignKey(Message.timestamp), primary_key=True
     )
+    # channel: Mapped[str] = mapped_column(String(CHARS_TWITCH_USERNAME), ForeignKey(Channel.name))
     id: Mapped[Optional[int]] = mapped_column(nullable=True)
     display_name: Mapped[Optional[str]] = mapped_column(nullable=True)
     color: Mapped[Optional[int]] = mapped_column(nullable=True)
@@ -115,7 +119,7 @@ class Chatter(Base):
             chatter_color = int(author.color.removeprefix("#"), 16)
         else:
             chatter_color = None
-        return Chatter(
+        return cls(
             name=author.name,
             timestamp=message.timestamp,
             id=chatter_id,
@@ -144,17 +148,8 @@ class Chatter(Base):
             self.prediction,
         )
 
-    def __eq__(self, other):
-        if self is other:
-            return True
-        elif isinstance(other, type(self)):
-            if self._values() == other._values():
-                return True
-        else:
-            return False
 
-
-class Channel(Base):
+class Channel(ComparableRow, Base):
     __tablename__ = "Channel"
     name: Mapped[str] = mapped_column(
         String(CHARS_TWITCH_USERNAME),
@@ -167,18 +162,8 @@ class Channel(Base):
     # always given for User
     id: Mapped[int] = mapped_column(nullable=False)
 
-    # todo mixin to unify this and Message?
     def _values(self) -> tuple:
         return self.name, self.id
-
-    def __eq__(self, other):
-        if self is other:
-            return True
-        elif isinstance(other, type(self)):
-            if self._values() == other._values():
-                return True
-        else:
-            return False
 
 
 def load_config() -> dict:
