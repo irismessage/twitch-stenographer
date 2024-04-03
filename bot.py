@@ -6,7 +6,7 @@ from typing import Optional, Self
 
 import twitchio
 from sqlalchemy import ForeignKey, desc, select
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Mapped, declarative_base, mapped_column
 from sqlalchemy.types import String
 from twitchio.ext import routines
@@ -84,6 +84,8 @@ class DeletedMessage(Base):
 
 class Chatter(Base):
     # todo add badges
+    # todo proper Optional mapping
+    # todo column for relevant channel
     __tablename__ = "Chatter"
     # composite primary key
     name: Mapped[str] = mapped_column(
@@ -190,35 +192,33 @@ class Client(twitchio.Client):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.engine = create_async_engine(f"sqlite+aiosqlite:///{DATABASE_PATH}")
-        self.session: Optional[AsyncSession] = None
+        self.async_session = async_sessionmaker(self.engine)
 
     async def connect(self):
         # setup goes here
         log.info("connect start")
 
-        self.session = AsyncSession(self.engine)
         async with self.engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-
-        self.refresh_channels.start()
-
         await super().connect()
+        self.refresh_channels.start()
 
         log.info("connect done")
 
     async def close(self):
         # shutdown goes here
         log.info("close start")
-        await self.session.close()
-        self.refresh_channels.cancel()
 
+        self.refresh_channels.cancel()
         await super().close()
+        await self.engine.dispose()
 
         log.info("close done")
 
     async def event_ready(self):
         log.info("ready")
 
+    # todo log messages added e.g. per hour
     async def event_message(self, message: twitchio.Message):
         author_name = message.author.name
         log.debug(
@@ -228,7 +228,18 @@ class Client(twitchio.Client):
             message.channel.name,
         )
 
-        user = await message.channel.user()
+        channel_user = await message.channel.user()
+
+        message_row = Message.from_message(message)
+        if isinstance(message.author, twitchio.Chatter):
+            # has extra info about the chatter
+            chatter = Chatter.from_message(message)
+        else:
+            # doesn't have extra info, use null columns
+            chatter = Chatter(name=author_name, timestamp=message.timestamp)
+        channel = Channel(
+            name=channel_user.name, timestamp=message.timestamp, id=channel_user.id
+        )
 
         # find the most recent chatter record for this author.
         # if it exists and matches the current badges etc.,
@@ -245,29 +256,17 @@ class Client(twitchio.Client):
             .order_by(desc(Channel.timestamp))
             .limit(1)
         )
-        # todo check this is sqlalchemy best practice
-        async with self.session.begin():
-            last_chatter_record = await self.session.scalar(last_chatter_query)
-            last_channel_record = await self.session.scalar(last_channel_query)
+        async with self.async_session.begin() as session:
+            last_chatter_record = await session.scalar(last_chatter_query)
+            last_channel_record = await session.scalar(last_channel_query)
 
-            message_row = Message.from_message(message)
-
-            if isinstance(message.author, twitchio.Chatter):
-                # has extra info about the chatter
-                chatter = Chatter.from_message(message)
-            else:
-                # doesn't have extra info, use null columns
-                chatter = Chatter(name=author_name, timestamp=message.timestamp)
-
-            channel = Channel(name=user.name, timestamp=message.timestamp, id=user.id)
-
-            self.session.add(message_row)
+            session.add(message_row)
             if message.first:
-                self.session.add(FirstMessage(id=message.id))
+                session.add(FirstMessage(id=message.id))
             if last_chatter_record != chatter:
-                self.session.add(chatter)
+                session.add(chatter)
             if last_channel_record != channel:
-                self.session.add(channel)
+                session.add(channel)
 
     # todo add command for this?
     # file watch requires another library
