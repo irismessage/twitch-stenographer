@@ -9,7 +9,7 @@ from sqlalchemy import ForeignKey, desc, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import String
-from twitchio.ext import routines
+from twitchio.ext.routines import routine
 
 CONFIG_PATH = "config.toml"
 DATABASE_PATH = "archive.db"
@@ -85,9 +85,25 @@ class DeletedMessage(Base):
     # name of the moderator that deleted it isn't given?
 
 
+class Channel(ComparableRow, Base):
+    __tablename__ = "Channel"
+    name: Mapped[str] = mapped_column(
+        String(CHARS_TWITCH_USERNAME),
+        ForeignKey(Message.channel_name),
+        primary_key=True,
+    )
+    timestamp: Mapped[datetime] = mapped_column(
+        ForeignKey(Message.timestamp), primary_key=True
+    )
+    # always given for User
+    id: Mapped[int] = mapped_column(nullable=False)
+
+    def _values(self) -> tuple:
+        return self.name, self.id
+
+
 class Chatter(ComparableRow, Base):
     # todo add badges
-    # todo column for relevant channel
     __tablename__ = "Chatter"
     # composite primary key
     name: Mapped[str] = mapped_column(
@@ -98,11 +114,14 @@ class Chatter(ComparableRow, Base):
     timestamp: Mapped[datetime] = mapped_column(
         ForeignKey(Message.timestamp), primary_key=True
     )
-    # channel: Mapped[str] = mapped_column(String(CHARS_TWITCH_USERNAME), ForeignKey(Channel.name))
+    channel: Mapped[str] = mapped_column(
+        String(CHARS_TWITCH_USERNAME), ForeignKey(Channel.name)
+    )
     id: Mapped[Optional[int]] = mapped_column(nullable=True)
     display_name: Mapped[Optional[str]] = mapped_column(nullable=True)
     color: Mapped[Optional[int]] = mapped_column(nullable=True)
-    is_broadcaster: Mapped[Optional[bool]] = mapped_column(nullable=True)
+    # note is_broadcaster is redundant since
+    # you can just tell whether name matches channel
     is_mod: Mapped[Optional[bool]] = mapped_column(nullable=True)
     is_subscriber: Mapped[Optional[bool]] = mapped_column(nullable=True)
     is_turbo: Mapped[Optional[bool]] = mapped_column(nullable=True)
@@ -122,6 +141,7 @@ class Chatter(ComparableRow, Base):
         return cls(
             name=author.name,
             timestamp=message.timestamp,
+            channel=message.channel.name,
             id=chatter_id,
             display_name=author.display_name,
             color=chatter_color,
@@ -138,32 +158,15 @@ class Chatter(ComparableRow, Base):
         return (
             self.name,
             self.id,
+            self.channel,
             self.display_name,
             self.color,
-            self.is_broadcaster,
             self.is_mod,
             self.is_subscriber,
             self.is_turbo,
             self.is_vip,
             self.prediction,
         )
-
-
-class Channel(ComparableRow, Base):
-    __tablename__ = "Channel"
-    name: Mapped[str] = mapped_column(
-        String(CHARS_TWITCH_USERNAME),
-        ForeignKey(Message.channel_name),
-        primary_key=True,
-    )
-    timestamp: Mapped[datetime] = mapped_column(
-        ForeignKey(Message.timestamp), primary_key=True
-    )
-    # always given for User
-    id: Mapped[int] = mapped_column(nullable=False)
-
-    def _values(self) -> tuple:
-        return self.name, self.id
 
 
 def load_config() -> dict:
@@ -220,7 +223,11 @@ class Client(twitchio.Client):
             chatter = Chatter.from_message(message)
         else:
             # doesn't have extra info, use null columns
-            chatter = Chatter(name=author_name, timestamp=message.timestamp)
+            chatter = Chatter(
+                name=author_name,
+                timestamp=message.timestamp,
+                channel=message.channel.name,
+            )
         channel = Channel(
             name=channel_user.name, timestamp=message.timestamp, id=channel_user.id
         )
@@ -252,9 +259,8 @@ class Client(twitchio.Client):
             if last_channel_record != channel:
                 session.add(channel)
 
-    # todo add command for this?
     # file watch requires another library
-    @routines.routine(minutes=10, wait_first=True)
+    @routine(minutes=10, wait_first=True)
     async def refresh_channels(self):
         log.debug("refresh channels start")
         try:

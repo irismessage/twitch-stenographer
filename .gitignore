@@ -1,6 +1,9 @@
 *.db
 *.toml
 !.example.toml
+# backups
+*.xz
+*.zip
 
 
 # Byte-compiled / optimized / DLL files
