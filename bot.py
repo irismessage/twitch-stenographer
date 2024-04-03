@@ -84,7 +84,6 @@ class DeletedMessage(Base):
 
 class Chatter(Base):
     # todo add badges
-    # todo proper Optional mapping
     # todo column for relevant channel
     __tablename__ = "Chatter"
     # composite primary key
@@ -96,15 +95,15 @@ class Chatter(Base):
     timestamp: Mapped[datetime] = mapped_column(
         ForeignKey(Message.timestamp), primary_key=True
     )
-    id: Mapped[int] = mapped_column(nullable=True)
-    display_name: Mapped[str] = mapped_column(nullable=True)
-    color: Mapped[int] = mapped_column(nullable=True)
-    is_broadcaster: Mapped[bool] = mapped_column(nullable=True)
-    is_mod: Mapped[bool] = mapped_column(nullable=True)
-    is_subscriber: Mapped[bool] = mapped_column(nullable=True)
-    is_turbo: Mapped[bool] = mapped_column(nullable=True)
-    is_vip: Mapped[bool] = mapped_column(nullable=True)
-    prediction: Mapped[twitchio.PredictionEnum] = mapped_column(nullable=True)
+    id: Mapped[Optional[int]] = mapped_column(nullable=True)
+    display_name: Mapped[Optional[str]] = mapped_column(nullable=True)
+    color: Mapped[Optional[int]] = mapped_column(nullable=True)
+    is_broadcaster: Mapped[Optional[bool]] = mapped_column(nullable=True)
+    is_mod: Mapped[Optional[bool]] = mapped_column(nullable=True)
+    is_subscriber: Mapped[Optional[bool]] = mapped_column(nullable=True)
+    is_turbo: Mapped[Optional[bool]] = mapped_column(nullable=True)
+    is_vip: Mapped[Optional[bool]] = mapped_column(nullable=True)
+    prediction: Mapped[Optional[twitchio.PredictionEnum]] = mapped_column(nullable=True)
 
     @classmethod
     def from_message(cls, message: twitchio.Message) -> Self:
