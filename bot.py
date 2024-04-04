@@ -289,6 +289,12 @@ class Client(twitchio.Client):
         )
         # todo randomly causing an error:
         #   sqlalchemy.exc.OperationalError: (sqlite3.OperationalError) database is locked
+        # corresonds with loud sound at https://www.twitch.tv/videos/2110237717?t=2h4m59s
+        # likely real IO timeout (https://docs.python.org/3/library/sqlite3.html#sqlite3.connect)
+        # on my PC, testing with most viewed streamer on the website works fine
+        # must be limit of shitty vps.
+        # any way to optimise?
+        # shouldn't sqlalchmy handle batching writes and stuff?
         async with self.async_session.begin() as session:
             last_chatter_record = await session.scalar(last_chatter_query)
             last_channel_record = await session.scalar(last_channel_query)
