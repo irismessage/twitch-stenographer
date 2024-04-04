@@ -24,6 +24,7 @@ from twitchio.ext.routines import routine
 #   - room state - emote only etc.
 #   - mass message deletion (ban and timeout)
 #   - raid
+#   - replies
 
 CONFIG_PATH = "config.toml"
 DATABASE_PATH = "archive.db"
@@ -286,6 +287,8 @@ class Client(twitchio.Client):
             .order_by(desc(Channel.timestamp))
             .limit(1)
         )
+        # todo randomly causing an error:
+        #   sqlalchemy.exc.OperationalError: (sqlite3.OperationalError) database is locked
         async with self.async_session.begin() as session:
             last_chatter_record = await session.scalar(last_chatter_query)
             last_channel_record = await session.scalar(last_channel_query)
@@ -305,6 +308,7 @@ class Client(twitchio.Client):
                 self.counter.chatters += 1
 
     # file watch requires another library
+    # todo this repeatedly reconnects if config gives uppercase
     @routine(minutes=10, wait_first=True)
     async def refresh_channels(self):
         log.debug("refresh channels start")
