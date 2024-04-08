@@ -2,3 +2,7 @@ token="abcdefghijklmnopqrstuvwxyz1234"
 channels=[
     "twitchchannel1",
 ]
+# channels on ChatReplay already:
+# https://chatreplay.stream/channels
+# vinesauce, vargskelethor, jerma985, ster, dougdoug,
+# jabroni_mike, limealicious, hackerling, clown_depot, thisisntnath
