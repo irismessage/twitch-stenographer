@@ -4,6 +4,7 @@ from datetime import datetime
 from sys import stdout
 from typing import Optional, Self
 
+import sqlalchemy.exc
 import twitchio
 from sqlalchemy import ForeignKey, desc, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -287,17 +288,11 @@ class Client(twitchio.Client):
             .order_by(desc(Channel.timestamp))
             .limit(1)
         )
-        # todo randomly causing an error:
-        #   sqlalchemy.exc.OperationalError: (sqlite3.OperationalError) database is locked
-        # corresonds with loud sound at https://www.twitch.tv/videos/2110237717?t=2h4m59s
-        # likely real IO timeout (https://docs.python.org/3/library/sqlite3.html#sqlite3.connect)
-        # on my PC, testing with most viewed streamer on the website works fine
-        # must be limit of shitty vps.
-        # any way to optimise?
-        # shouldn't sqlalchmy handle batching writes and stuff?
-        async with self.async_session.begin() as session:
-            last_chatter_record = await session.scalar(last_chatter_query)
-            last_channel_record = await session.scalar(last_channel_query)
+
+        try:
+            async with self.async_session.begin() as session:
+                last_chatter_record = await session.scalar(last_chatter_query)
+                last_channel_record = await session.scalar(last_channel_query)
 
             session.add(message_row)
             self.counter.messages += 1
@@ -312,6 +307,23 @@ class Client(twitchio.Client):
                 log.debug("adding chatter record")
                 session.add(chatter)
                 self.counter.chatters += 1
+        except sqlalchemy.exc.OperationalError as error:
+            # limit traceback spam and provide useful information
+            # in case of I/O timeout
+            log.error(error)
+            streams = await self.fetch_streams(user_ids=[channel_user.id])
+            stream_info = streams[0]
+            now = datetime.now()
+            stream_started = stream_info.started_at
+            stream_uptime = now - stream_started
+            # todo test
+            # todo handle no stream in progress
+            log.error(
+                "stream started: %s, current time: %s, stream uptime: %s",
+                stream_started,
+                now,
+                stream_uptime,
+            )
 
     # file watch requires another library
     # todo this repeatedly reconnects if config gives uppercase
