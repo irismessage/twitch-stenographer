@@ -245,6 +245,21 @@ class Client(twitchio.Client):
     async def event_ready(self):
         log.info("ready")
 
+    async def tag_commands(self, message: twitchio.Message):
+        if message.channel.name not in ("joelsgp", "traditional_scrench"):
+            return
+
+        tag_pairs = {
+            "!donate": """Direct donation: scren.ch/fundraiser // 
+Streamlabs donation: scren.ch/tip 100% will go to fundraiser, they don't take a cut!""",
+            "!fundraiser": "scren.ch/fundraiser",
+            "!tip": "scren.ch/tip",
+        }
+
+        response = tag_pairs.get(message.content)
+        if response is not None:
+            await message.channel.send(response)
+
     async def event_message(self, message: twitchio.Message):
         author_name = message.author.name
         log.debug(
@@ -253,6 +268,10 @@ class Client(twitchio.Client):
             author_name,
             message.channel.name,
         )
+
+        await self.tag_commands(message)
+        return
+
 
         channel_user = await message.channel.user()
 
